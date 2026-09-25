@@ -1,0 +1,88 @@
+{
+  "projects": [
+    {
+      "id": "lecture",
+      "name": "Multimodal Lecture Companion",
+      "category": "AI / Education",
+      "description": "An AI-powered lecture assistant designed to help students understand and interact with lecture content more effectively.",
+      "technologies": [
+        "React",
+        "TypeScript",
+        "FastAPI",
+        "Python",
+        "Groq",
+        "Qdrant"
+      ],
+      "features": [
+        "Lecture understanding",
+        "AI-powered assistance",
+        "Topic search",
+        "RAG-based retrieval",
+        "Intelligent learning support"
+      ]
+    },
+    {
+      "id": "aws-faceai",
+      "name": "AWS FaceAI Multi-Camera",
+      "category": "AI / Computer Vision",
+      "description": "An AI-powered multi-camera face recognition system using AWS computer vision services to identify registered people.",
+      "technologies": [
+        "Python",
+        "AWS Rekognition",
+        "Amazon S3",
+        "DynamoDB",
+        "OpenCV",
+        "Flask"
+      ],
+      "features": [
+        "Multi-camera face detection",
+        "Face recognition",
+        "Real-time identification",
+        "Cloud-based processing",
+        "Registered face management"
+      ],
+      "github": "https://github.com/Abhishek-bo/AWS-Face-Recognition"
+    },
+    {
+      "id": "portfolio",
+      "name": "AbhishekOS Portfolio",
+      "category": "Web / AI",
+      "description": "An interactive Windows-inspired developer portfolio where recruiters can explore projects, resume and AI-powered profile information through a desktop interface.",
+      "technologies": [
+        "React",
+        "TypeScript",
+        "Tailwind CSS",
+        "Vite",
+        "shadcn/ui"
+      ],
+      "features": [
+        "Windows-style desktop",
+        "Glassmorphism interface",
+        "Desktop applications",
+        "Start Menu",
+        "Taskbar",
+        "AI portfolio assistant"
+      ]
+    },
+    {
+      "id": "upi-offline",
+      "name": "UPI Offline",
+      "category": "FinTech / Backend",
+      "description": "An offline payment concept designed to explore digital transactions in environments where internet connectivity is unavailable.",
+      "technologies": [
+        "Java",
+        "Spring Boot",
+        "Android",
+        "UPI",
+        "Offline Communication"
+      ],
+      "features": [
+        "Offline payment workflow",
+        "No internet dependency",
+        "Device-to-device communication",
+        "Payment request handling",
+        "Offline transaction concept"
+      ]
+    }
+  ]
+}
