@@ -15,7 +15,7 @@ interface Message {
   text: string;
 }
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "https://abhishek-portfolio-cf75.onrender.com";
 
 const cleanAIResponse = (text: string) => {
   const trimmed = text.trim();
