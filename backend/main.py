@@ -26,12 +26,12 @@ PROJECTS_PATH = BASE_DIR / "projects.json"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 if not GROQ_API_KEY:
-    raise RuntimeError(
-        "GROQ_API_KEY is not set in the .env file."
-    )
+    raise RuntimeError("GROQ_API_KEY is not set.")
 
 client = Groq(
-    api_key=GROQ_API_KEY
+    api_key=GROQ_API_KEY,
+    timeout=30.0,
+    max_retries=2,
 )
 
 MODEL = "openai/gpt-oss-120b"
@@ -43,17 +43,13 @@ MODEL = "openai/gpt-oss-120b"
 
 app = FastAPI(
     title="AbhishekOS AI Backend",
-    version="1.1.0"
+    version="1.2.0",
 )
 
 
 # =========================================================
 # CORS
 # =========================================================
-
-from fastapi.middleware.cors import CORSMiddleware
-
-app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,8 +63,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # =========================================================
-# RESUME MODELS
+# MODELS
 # =========================================================
 
 class Experience(BaseModel):
@@ -76,43 +73,20 @@ class Experience(BaseModel):
     role: str | None = None
     duration: str | None = None
     description: str | None = None
-
-    skills_used: list[str] = Field(
-        default_factory=list
-    )
+    skills_used: list[str] = Field(default_factory=list)
 
 
 class Resume(BaseModel):
     name: str | None = None
     email: str | None = None
     phone: str | None = None
-
     total_experience_years: float | None = None
+    skills: list[str] = Field(default_factory=list)
+    experiences: list[Experience] = Field(default_factory=list)
+    education: list[str] = Field(default_factory=list)
+    projects: list[str] = Field(default_factory=list)
+    certifications: list[str] = Field(default_factory=list)
 
-    skills: list[str] = Field(
-        default_factory=list
-    )
-
-    experiences: list[Experience] = Field(
-        default_factory=list
-    )
-
-    education: list[str] = Field(
-        default_factory=list
-    )
-
-    projects: list[str] = Field(
-        default_factory=list
-    )
-
-    certifications: list[str] = Field(
-        default_factory=list
-    )
-
-
-# =========================================================
-# CHAT MODELS
-# =========================================================
 
 class ChatMessage(BaseModel):
     role: str
@@ -121,17 +95,11 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str
-
-    conversation: list[ChatMessage] = Field(
-        default_factory=list
-    )
-
-
-resume_schema = Resume.model_json_schema()
+    conversation: list[ChatMessage] = Field(default_factory=list)
 
 
 # =========================================================
-# READ PDF
+# READ RESUME PDF
 # =========================================================
 
 def read_pdf(file_path: Path) -> str:
@@ -176,76 +144,20 @@ def load_projects() -> dict:
 
 
 # =========================================================
-# PARSE RESUME
-# =========================================================
-
-def parse_resume(resume_text: str) -> Resume:
-
-    system_prompt = f"""
-You are an expert resume parser.
-
-Extract information from the resume based on
-its meaning, not only exact section headings.
-
-Return ONLY valid JSON matching this schema:
-
-{json.dumps(resume_schema, indent=2)}
-
-Important rules:
-
-1. Do not invent information.
-
-2. If a value is not available, return null.
-
-3. If a list has no information, return an empty list.
-
-4. Include internships inside experiences.
-
-5. Extract relevant skills from the entire resume.
-
-6. Preserve the meaning of the original resume.
-
-7. Do not add information that is not present.
-"""
-
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=[
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": f"""
-Parse the following resume:
-
-{resume_text}
-"""
-            }
-        ],
-        response_format={
-            "type": "json_object"
-        }
-    )
-
-    raw_output = response.choices[0].message.content
-
-    if not raw_output:
-        raise ValueError(
-            "Groq returned an empty resume response."
-        )
-
-    data = json.loads(raw_output)
-
-    return Resume(**data)
-
-
-# =========================================================
 # LOAD RESUME
 # =========================================================
+#
+# IMPORTANT:
+# We no longer call Groq during server startup.
+#
+# This makes Render cold starts much faster.
+#
+# The resume is kept as plain text and supplied to
+# the AI only when an AI request is made.
+#
+# =========================================================
 
-def load_resume() -> Resume:
+try:
 
     print("Loading resume...")
 
@@ -258,24 +170,22 @@ def load_resume() -> Resume:
             "Resume PDF contains no readable text."
         )
 
-    print("Parsing resume with Groq...")
-
-    resume = parse_resume(
-        resume_text
-    )
-
     print("Resume loaded successfully.")
 
-    return resume
+except Exception as error:
+
+    print(
+        f"WARNING: Resume loading failed: {error}"
+    )
+
+    resume_text = ""
 
 
 # =========================================================
-# LOAD KNOWLEDGE
+# LOAD PROJECTS
 # =========================================================
 
 try:
-
-    resume = load_resume()
 
     projects = load_projects()
 
@@ -288,10 +198,8 @@ try:
 except Exception as error:
 
     print(
-        f"WARNING: Startup data loading failed: {error}"
+        f"WARNING: Project loading failed: {error}"
     )
-
-    resume = Resume()
 
     projects = {
         "projects": []
@@ -302,10 +210,7 @@ except Exception as error:
 # SYSTEM PROMPT
 # =========================================================
 
-def build_system_prompt(
-    resume: Resume,
-    projects: dict
-) -> str:
+def build_system_prompt() -> str:
 
     project_data = json.dumps(
         projects,
@@ -326,10 +231,10 @@ You answer questions from:
 - visitors
 
 ==================================================
-CANDIDATE INFORMATION
+CANDIDATE RESUME
 ==================================================
 
-{resume.model_dump_json(indent=2)}
+{resume_text}
 
 ==================================================
 PROJECT INFORMATION
@@ -341,14 +246,15 @@ PROJECT INFORMATION
 IMPORTANT RULES
 ==================================================
 
-1. Answer ONLY using the provided candidate
-   information and project information.
+1. Answer ONLY using the provided resume
+   and project information.
 
 2. NEVER invent information.
 
-3. NEVER create technologies, projects, companies,
-   achievements, education, certifications,
-   experience, or skills that are not provided.
+3. NEVER create technologies, projects,
+   companies, achievements, education,
+   certifications, experience, or skills
+   that are not provided.
 
 4. If information is unavailable, say:
 
@@ -356,8 +262,8 @@ IMPORTANT RULES
 
 5. Be professional, natural, and concise.
 
-6. Answer as if you are representing Abhishek
-   professionally.
+6. Answer as if you are representing
+   Abhishek professionally.
 
 7. Use conversation history to understand
    follow-up questions.
@@ -369,13 +275,13 @@ IMPORTANT RULES
    "that project"
    "its technologies"
    "the first one"
-   "what about the other project"
+   "the other project"
 
-   using the conversation history.
+   using conversation history.
 
 9. Do not confuse information between projects.
 
-10. When discussing a project, you may explain:
+10. When discussing a project, explain:
 
    - purpose
    - technologies
@@ -383,13 +289,12 @@ IMPORTANT RULES
    - GitHub link if available
 
 11. Do not claim professional experience unless
-    it exists in the candidate information.
+    it exists in the provided information.
 
 12. Do not expose internal JSON data.
 
-13. Do not mention that you are reading JSON,
-    unless the user explicitly asks how the
-    assistant obtains information.
+13. Do not mention internal implementation
+    unless the user explicitly asks.
 
 14. If asked about multiple projects,
     summarize them clearly.
@@ -414,45 +319,45 @@ IMPORTANT RULES
 def build_chat_messages(
     question: str,
     conversation: list[ChatMessage],
-    resume: Resume,
-    projects: dict
 ) -> list[dict]:
 
-    system_prompt = build_system_prompt(
-        resume,
-        projects
-    )
-
-    messages: list[dict] = [
+    messages = [
         {
             "role": "system",
-            "content": system_prompt
+            "content": build_system_prompt(),
         }
     ]
 
-    # Keep only the most recent conversation
-    # to avoid unnecessarily large requests.
-    recent_conversation = conversation[-12:]
+    # Keep only recent messages.
+    recent_conversation = conversation[-10:]
 
     for message in recent_conversation:
 
-        if message.role not in {"user", "assistant"}:
+        if message.role not in {
+            "user",
+            "assistant"
+        }:
             continue
 
-        if not message.content.strip():
+        content = message.content.strip()
+
+        if not content:
             continue
+
+        # Prevent extremely large messages.
+        content = content[:4000]
 
         messages.append(
             {
                 "role": message.role,
-                "content": message.content
+                "content": content,
             }
         )
 
     messages.append(
         {
             "role": "user",
-            "content": question
+            "content": question[:4000],
         }
     )
 
@@ -466,20 +371,18 @@ def build_chat_messages(
 def ask_candidate(
     question: str,
     conversation: list[ChatMessage],
-    resume: Resume,
-    projects: dict
 ) -> str:
 
     messages = build_chat_messages(
         question,
         conversation,
-        resume,
-        projects
     )
 
     response = client.chat.completions.create(
         model=MODEL,
-        messages=messages
+        messages=messages,
+        temperature=0.2,
+        max_tokens=700,
     )
 
     answer = response.choices[0].message.content
@@ -490,7 +393,7 @@ def ask_candidate(
             "to answer that."
         )
 
-    return answer
+    return answer.strip()
 
 
 # =========================================================
@@ -500,32 +403,43 @@ def ask_candidate(
 def stream_candidate(
     question: str,
     conversation: list[ChatMessage],
-    resume: Resume,
-    projects: dict
 ) -> Iterator[str]:
 
-    messages = build_chat_messages(
-        question,
-        conversation,
-        resume,
-        projects
-    )
+    try:
 
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=messages,
-        stream=True
-    )
+        messages = build_chat_messages(
+            question,
+            conversation,
+        )
 
-    for chunk in response:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            temperature=0.2,
+            max_tokens=700,
+            stream=True,
+        )
 
-        if not chunk.choices:
-            continue
+        for chunk in response:
 
-        delta = chunk.choices[0].delta
+            if not chunk.choices:
+                continue
 
-        if delta.content:
-            yield delta.content
+            delta = chunk.choices[0].delta
+
+            if delta.content:
+                yield delta.content
+
+    except Exception as error:
+
+        print(
+            f"Streaming error: {error}"
+        )
+
+        yield (
+            "\n\nSorry, I couldn't complete "
+            "the response. Please try again."
+        )
 
 
 # =========================================================
@@ -537,7 +451,7 @@ def home():
 
     return {
         "message": "AbhishekOS AI Backend is running",
-        "status": "online"
+        "status": "online",
     }
 
 
@@ -550,10 +464,22 @@ def health():
 
     return {
         "status": "healthy",
-        "resume_loaded": bool(resume.name),
+        "resume_loaded": bool(resume_text),
         "projects_loaded": len(
             projects.get("projects", [])
-        )
+        ),
+    }
+
+
+# =========================================================
+# WARMUP
+# =========================================================
+
+@app.get("/warmup")
+def warmup():
+
+    return {
+        "status": "ready"
     }
 
 
@@ -570,7 +496,7 @@ def chat(request: ChatRequest):
 
         raise HTTPException(
             status_code=400,
-            detail="Question cannot be empty."
+            detail="Question cannot be empty.",
         )
 
     try:
@@ -578,8 +504,6 @@ def chat(request: ChatRequest):
         answer = ask_candidate(
             question,
             request.conversation,
-            resume,
-            projects
         )
 
         return {
@@ -594,7 +518,7 @@ def chat(request: ChatRequest):
 
         raise HTTPException(
             status_code=500,
-            detail="Unable to generate an AI response."
+            detail="Unable to generate an AI response.",
         )
 
 
@@ -611,33 +535,17 @@ def chat_stream(request: ChatRequest):
 
         raise HTTPException(
             status_code=400,
-            detail="Question cannot be empty."
+            detail="Question cannot be empty.",
         )
 
-    try:
-
-        return StreamingResponse(
-            stream_candidate(
-                question,
-                request.conversation,
-                resume,
-                projects
-            ),
-            media_type="text/plain; charset=utf-8",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            }
-        )
-
-    except Exception as error:
-
-        print(
-            f"Streaming chat error: {error}"
-        )
-
-        raise HTTPException(
-            status_code=500,
-            detail="Unable to generate an AI response."
-        )
+    return StreamingResponse(
+        stream_candidate(
+            question,
+            request.conversation,
+        ),
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Cache-Control": "no-cache, no-store",
+            "X-Accel-Buffering": "no",
+        },
+    )

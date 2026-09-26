@@ -1,8 +1,10 @@
+
 import {
   useEffect,
   useRef,
   useState,
 } from "react";
+
 import {
   Send,
   Bot,
@@ -15,7 +17,8 @@ interface Message {
   text: string;
 }
 
-const API_URL = "https://abhishek-portfolio-cf75.onrender.com";
+const API_URL =
+  "https://abhishek-portfolio-cf75.onrender.com";
 
 const cleanAIResponse = (text: string) => {
   const trimmed = text.trim();
@@ -54,13 +57,16 @@ const AI = () => {
 
   const [loading, setLoading] = useState(false);
 
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef =
+    useRef<HTMLInputElement>(null);
 
   const chatContainerRef =
     useRef<HTMLDivElement>(null);
 
+  // Auto-scroll chat to the latest message
   useEffect(() => {
-    const container = chatContainerRef.current;
+    const container =
+      chatContainerRef.current;
 
     if (!container) return;
 
@@ -69,6 +75,14 @@ const AI = () => {
       behavior: "smooth",
     });
   }, [messages]);
+
+  // Warm up the backend when the AI window opens
+  useEffect(() => {
+    fetch(`${API_URL}/warmup`).catch(() => {
+      // Backend may still be waking up.
+      // No visible error is needed.
+    });
+  }, []);
 
   const handleSend = async () => {
     const userMessage = input.trim();
@@ -106,7 +120,8 @@ const AI = () => {
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
           body: JSON.stringify({
             question: userMessage,
@@ -130,7 +145,8 @@ const AI = () => {
       const reader =
         response.body.getReader();
 
-      const decoder = new TextDecoder();
+      const decoder =
+        new TextDecoder();
 
       let accumulatedText = "";
 
@@ -228,7 +244,7 @@ const AI = () => {
           updated[lastIndex] = {
             ...updated[lastIndex],
             text:
-              "I'm unable to connect to my AI backend right now. Please make sure the backend server is running.",
+              "I'm unable to connect to my AI backend right now. Please try again in a moment.",
           };
         }
 
